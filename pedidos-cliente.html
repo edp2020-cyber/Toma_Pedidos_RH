@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Haz tu pedido · Handball</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap">
+<style>
+:root{--bg:#EEF3FA;--card:#fff;--ink:#10223F;--muted:#5A6B85;--line:#D4DEEC;--blue:#1F5FBF;--ball:#F26B1D;--ok:#1B8A4B;--on:#fff;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root{--bg:#0C1626;--card:#14233B;--ink:#E8EFFA;--muted:#93A6C4;--line:#243857;--blue:#5B9BFF;--ball:#FF8A47;--ok:#4FD58A;--on:#08111F}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 Barlow,system-ui,sans-serif}
+h1,h2,h3,.big{font-family:"Barlow Condensed",Barlow,system-ui,sans-serif;letter-spacing:.01em}
+header{background:var(--blue);color:#fff;padding:16px;border-bottom:6px solid var(--ball);text-align:center}
+@media (prefers-color-scheme:dark){header{color:#08111F}}
+header h1{margin:0;font-size:2rem;font-weight:800;text-transform:uppercase}
+header p{margin:2px 0 0;opacity:.9}
+main{max-width:560px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}
+.menu{display:flex;align-items:center;gap:12px;justify-content:space-between}
+.menu h3{margin:0;font-size:1.5rem;font-weight:700}
+.menu p{margin:0;color:var(--muted);font-size:.95rem}
+.price{font-weight:600}
+.badge{display:inline-block;background:var(--ball);color:#fff;font:800 .95rem "Barlow Condensed",sans-serif;padding:2px 9px;border-radius:99px;margin-left:8px;vertical-align:3px}
+.stepper{display:flex;align-items:center;gap:8px}
+.stepper button{width:48px;height:48px;border-radius:50%;border:2px solid var(--blue);background:transparent;color:var(--blue);font-size:1.7rem;line-height:1;cursor:pointer}
+.stepper b{min-width:30px;text-align:center;font:800 1.9rem "Barlow Condensed",sans-serif}
+label{display:block;color:var(--muted);font-size:.9rem;margin-bottom:4px}
+input[type=text]{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 4px}
+.chip{flex:1;min-width:100px;padding:11px;border-radius:10px;border:2px solid var(--line);background:transparent;color:var(--ink);font:600 1rem Barlow,sans-serif;cursor:pointer}
+.chip[aria-pressed=true]{border-color:var(--blue);background:var(--blue);color:var(--on)}
+.line{display:flex;justify-content:space-between;padding:4px 0}
+.disc{color:var(--ok);font-weight:600}
+.total{border-top:2px solid var(--line);margin-top:8px;padding-top:10px;font:800 2rem "Barlow Condensed",sans-serif}
+.cta{width:100%;margin-top:12px;background:var(--ok);color:#fff;border:0;border-radius:12px;padding:16px;font:800 1.4rem "Barlow Condensed",sans-serif;text-transform:uppercase;cursor:pointer}
+@media (prefers-color-scheme:dark){.cta{color:#08111F}}
+.cta:disabled{opacity:.4;cursor:not-allowed}
+.ghost{background:transparent;color:var(--blue);border:2px solid var(--blue);border-radius:10px;padding:9px 14px;font:600 .95rem Barlow,sans-serif;cursor:pointer}
+.bank{background:var(--bg);border:1px dashed var(--blue);border-radius:12px;padding:12px;margin-top:10px}
+.bank pre{white-space:pre-wrap;font:inherit;margin:6px 0 10px}
+.hint{color:var(--muted);font-size:.9rem;text-align:center;margin:8px 0 0}
+button:focus-visible,input:focus-visible{outline:3px solid var(--ball);outline-offset:2px}
+</style>
+</head>
+<body>
+<header><h1>🤾 Haz tu pedido</h1><p>Elige tu menú y envíalo por WhatsApp</p></header>
+<main>
+  <div id="menus"></div>
+  <div class="card" id="cart"></div>
+</main>
+
+<script>
+(function(){
+  /* ====== CONFIGURACIÓN: edita solo esta parte ====== */
+  var WHATSAPP='56932518484';   // número que recibe los pedidos, con código de país y sin signos ni espacios
+  var BANK='';                  // datos para transferencia (se muestran al elegir Transferencia). Ejemplo: 'Nombre\nRUT\nBanco\nCuenta\nCorreo'
+  var MENUS=[
+    {id:'m1',name:'Menú 1',desc:'Hamburguesa + bebida',price:4500,promo:false},
+    {id:'m2',name:'Menú 2',desc:'Completo + bebida',price:3500,promo:true}  // promo:true = 2x1
+  ];
+  /* ================================================== */
+
+  var cart={},pay='Efectivo',name='',lastMsg='';
+  var $=function(i){return document.getElementById(i)};
+  var money=function(x){return '$'+Math.round(x).toLocaleString('es-CL')};
+  var esc=function(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
+
+  function calc(){
+    var lines=[],disc=0,sub=0;
+    MENUS.forEach(function(m){
+      var q=cart[m.id]||0;if(!q)return;
+      var free=m.promo?Math.floor(q/2):0;
+      sub+=q*m.price;disc+=free*m.price;
+      lines.push({name:m.name,qty:q,price:m.price,free:free});
+    });
+    return {lines:lines,disc:disc,total:sub-disc};
+  }
+
+  function renderMenus(){
+    $('menus').innerHTML=MENUS.map(function(m){
+      return '<div class="card menu"><div><h3>'+esc(m.name)+(m.promo?'<span class="badge">2x1</span>':'')+'</h3><p>'+esc(m.desc)+'</p><div class="price">'+money(m.price)+(m.promo?' · lleva 2, paga 1':'')+'</div></div>'+
+      '<div class="stepper"><button data-a="-" data-id="'+m.id+'" aria-label="Quitar '+esc(m.name)+'">−</button><b>'+(cart[m.id]||0)+'</b><button data-a="+" data-id="'+m.id+'" aria-label="Agregar '+esc(m.name)+'">+</button></div></div>';
+    }).join('');
+  }
+
+  function renderCart(){
+    var c=calc();
+    var h='<h2 style="margin:0 0 10px;font-size:1.5rem">Tu pedido</h2>';
+    h+='<label for="cname">Tu nombre o N° de mesa</label><input type="text" id="cname" maxlength="40" value="'+esc(name)+'">';
+    h+='<label style="margin-top:12px">Forma de pago</label><div class="chips">'+['Efectivo','Transferencia','Tarjeta'].map(function(p){return '<button class="chip" data-pay="'+p+'" aria-pressed="'+(p===pay)+'">'+p+'</button>'}).join('')+'</div>';
+    if(pay==='Transferencia'){
+      h+='<div class="bank"><b>Datos para transferir</b>'+(BANK?'<pre>'+esc(BANK)+'</pre><button class="ghost" id="copybank">Copiar datos</button>':'<p style="margin:6px 0 0;color:var(--muted)">Te enviaremos los datos por WhatsApp.</p>')+'</div>';
+    }
+    h+='<div style="margin-top:14px">';
+    if(!c.lines.length)h+='<p class="hint">Agrega al menos un menú.</p>';
+    c.lines.forEach(function(l){
+      h+='<div class="line"><span>'+l.qty+'× '+esc(l.name)+'</span><span>'+money(l.qty*l.price)+'</span></div>';
+      if(l.free)h+='<div class="line disc"><span>Promo 2x1 ('+l.free+' gratis)</span><span>−'+money(l.free*l.price)+'</span></div>';
+    });
+    h+='<div class="line total"><span>Total</span><span>'+money(c.total)+'</span></div></div>';
+    h+='<button class="cta" id="send"'+(c.lines.length&&name.trim()?'':' disabled')+'>Enviar pedido por WhatsApp</button>';
+    h+='<p class="hint">Se abrirá WhatsApp con tu pedido listo. Solo toca enviar.</p>';
+    h+='<div class="bank" id="fb" hidden><p style="margin:0 0 8px">¿No se abrió WhatsApp? Copia tu pedido y pégalo en un chat con +'+WHATSAPP+'.</p><button class="ghost" id="copymsg">Copiar pedido</button></div>';
+    $('cart').innerHTML=h;
+  }
+
+  document.addEventListener('click',function(e){
+    var b=e.target.closest('button');if(!b)return;
+    if(b.dataset.a){var id=b.dataset.id,q=cart[id]||0;cart[id]=Math.max(0,q+(b.dataset.a==='+'?1:-1));renderMenus();return renderCart()}
+    if(b.dataset.pay){pay=b.dataset.pay;return renderCart()}
+    if(b.id==='copybank'){if(navigator.clipboard)navigator.clipboard.writeText(BANK).then(function(){b.textContent='¡Copiado!'}).catch(function(){});return}
+    if(b.id==='copymsg'){if(navigator.clipboard)navigator.clipboard.writeText(lastMsg).then(function(){b.textContent='¡Copiado!'}).catch(function(){});return}
+    if(b.id==='send'){
+      var c=calc();if(!c.lines.length||!name.trim())return;
+      var t='🤾 *Pedido nuevo*\nCliente: '+name.trim()+'\n';
+      c.lines.forEach(function(l){t+=l.qty+'× '+l.name+'\n'});
+      if(c.disc)t+='Promo 2x1: −'+money(c.disc)+'\n';
+      t+='*Total: '+money(c.total)+'*\nPago: '+pay;
+      lastMsg=t;
+      var a=document.createElement('a');a.href='https://wa.me/'+WHATSAPP+'?text='+encodeURIComponent(t);a.target='_blank';a.rel='noopener';document.body.appendChild(a);a.click();a.remove();
+      $('fb').hidden=false;
+    }
+  });
+  document.addEventListener('input',function(e){
+    if(e.target.id==='cname'){
+      name=e.target.value;
+      var s=$('send'),c=calc();if(s)s.disabled=!(c.lines.length&&name.trim());
+    }
+  });
+
+  renderMenus();renderCart();
+})();
+</script>
+</body>
+</html>
